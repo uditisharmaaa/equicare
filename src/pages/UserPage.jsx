@@ -137,91 +137,92 @@ export default function UserPage() {
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
 
-  async function submitToHospital() {
-    const text = transcript.trim();
-    if (!text) return;
+  const ANTHROPIC_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
-    if (!supabase) {
-      alert("Supabase not configured (.env). Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-      return;
-    }
-
-    const user_id = getDeviceUserId();
-
-    // 1) Pull patient profile from local storage
-    let { patient_name, age, gender, weight, race } = readLocalProfile();
-
-    // 2) Upsert into users so the FK will pass (ONLY known columns, ONLY non-nulls)
-    const userUpsert = { user_id };
-    if (patient_name != null) userUpsert.patient_name = patient_name;
-    if (age != null)          userUpsert.age = age;
-    if (gender != null)       userUpsert.gender = gender;
-    if (weight != null)       userUpsert.weight = weight;
-    if (race != null)         userUpsert.race = race;
-
-    const { error: upErr } = await supabase.from("users").upsert(userUpsert);
-    if (upErr) {
-      console.error("users upsert failed:", upErr);
-      alert(upErr.message || "Users upsert blocked (check RLS on 'users').");
-      return;
-    }
-
-    // 3) Fallback: if anything is still null, try reading back from users (optional)
-    if (patient_name == null || age == null || gender == null || weight == null || race == null) {
-      const { data } = await supabase
-        .from("users")
-        .select("patient_name, age, gender, weight, race")
-        .eq("user_id", user_id)
-        .maybeSingle();
-      if (data) {
-        if (patient_name == null) patient_name = data.patient_name ?? null;
-        if (age == null)          age = data.age ?? null;
-        if (gender == null)       gender = data.gender ?? null;
-        if (weight == null)       weight = data.weight ?? null;
-        if (race == null)         race = data.race ?? null;
+  async function analyzeWithClaudeProxy(transcript) {
+    try {
+        const r = await fetch("http://localhost:3001/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ transcript }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          // Show the detail in an alert so you see the reason
+          alert("Claude error: " + (data?.detail?.error?.message || JSON.stringify(data)));
+          console.warn("proxy error", data);
+          return null;
+        }
+        return data; // { score, review }
+      } catch (e) {
+        alert("Proxy fetch failed: " + String(e));
+        console.warn("proxy fetch failed", e);
+        return null;
       }
     }
+    
+    async function submitToHospital() {
+        const text = transcript.trim();
+        if (!text) return;
+      
+        if (!supabase) {
+          alert("Supabase not configured (.env). Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+          return;
+        }
+      
+        const user_id = getDeviceUserId();
+      
+        // 1) profile upsert
+        let { patient_name, age, gender, weight, race } = readLocalProfile();
+        const userUpsert = { user_id };
+        if (patient_name != null) userUpsert.patient_name = patient_name;
+        if (age != null)          userUpsert.age = age;
+        if (gender != null)       userUpsert.gender = gender;
+        if (weight != null)       userUpsert.weight = weight;
+        if (race != null)         userUpsert.race = race;
+        const { error: upErr } = await supabase.from("users").upsert(userUpsert);
+        if (upErr) { console.error(upErr); alert(upErr.message); return; }
+      
+        // 2) doctor name
+        const selected = doctors.find(d => d.doctor_id === doctorId) || null;
+        const doctor_name = selected?.doctor_name || null;
+      
+        // 3) Claude via local proxy (no CORS)
+        let score = null, review = null;
+        const out = await analyzeWithClaudeProxy(text);
+        if (out) { score = out.score ?? null; review = out.review ?? null; }
+      
+        // 4) SINGLE payload + insert
+        const payload = {
+          user_id,
+          doctor_id: doctorId || null,
+          doctor_name,
+          transcript: text,
+        };
+        if (patient_name != null) payload.patient_name = patient_name;
+        if (age != null)          payload.age = age;
+        if (gender != null)       payload.gender = gender;
+        if (weight != null)       payload.weight = weight;
+        if (race != null)         payload.race = race;
+      
+        const causeClean = cause.trim();
+        if (causeClean) payload.cause = causeClean;
+        const ratingNum = Number(userRating);
+        if (!Number.isNaN(ratingNum)) payload.user_rating = Math.max(0, Math.min(10, ratingNum));
+      
+        if (score != null) payload.bias_rating = score;   // numeric column
+        if (review)        payload.bias_review = review;  // text column
+      
+        const { error: tErr } = await supabase.from("transcripts").insert(payload);
+        if (tErr) { console.error(tErr); alert(tErr.message); return; }
+      
+        alert(`Submitted ✓  Bias score: ${score ?? "n/a"}`);
+      }
+      
 
-    // 4) Doctor linkage (permit blank doctor_id if you don't have IDs yet)
-    const selected = doctors.find(d => d.doctor_id === doctorId) || null;
-    const doctor_name = selected?.doctor_name || null;
 
-    // 5) Insert transcript — ONLY columns that exist in your schema
-    // (Your 'transcripts' table shows these: user_id, doctor_id, age, user_rating, race, weight,
-    //  gender, cause, transcript, doctor_name, patient_name, transcript_identifier, date, bias_rating)
-    const payload = {
-      user_id,
-      doctor_id: doctorId || null,
-      doctor_name,
-      transcript: text,
-    };
 
-    if (patient_name != null) payload.patient_name = patient_name;
-    if (age != null)          payload.age = age;
-    if (gender != null)       payload.gender = gender;
-    if (weight != null)       payload.weight = weight;
-    if (race != null)         payload.race = race;
 
-    // NEW: include cause + user_rating
-    const causeClean = cause.trim();
-    if (causeClean) payload.cause = causeClean;
-
-    const ratingNum = Number(userRating);
-    if (!Number.isNaN(ratingNum)) {
-      payload.user_rating = Math.max(0, Math.min(10, ratingNum));
-    }
-
-    const { error: tErr } = await supabase.from("transcripts").insert(payload);
-    if (tErr) {
-      console.error("transcripts insert failed:", tErr);
-      alert(tErr.message || "Insert blocked (check RLS on 'transcripts').");
-      return;
-    }
-
-    alert("Submitted to hospital ✓");
-    // Optionally clear inputs:
-    // setTranscript(""); setInterim(""); setCause(""); setUserRating(10);
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white to-blue-50 px-4">
@@ -394,3 +395,7 @@ function smartJoin(prev, next) {
 }
 function capitalize(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 function composeLive(finalText, interimText) { return (finalText || "") + (interimText ? interimText : ""); }
+
+
+// --- Claude (Anthropic) helper ---
+// NOTE: Frontend call exposes your key (fine for hackathon; NOT for prod).
