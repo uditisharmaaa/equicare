@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "./supabase";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 export default function DoctorDetailPage() {
   const { doctorId } = useParams();
@@ -38,14 +39,19 @@ export default function DoctorDetailPage() {
 
       if (transcriptsError) throw transcriptsError;
 
-      // Calculate average rating from transcripts
+      // Calculate average rating and bias rating from transcripts
       const avgRating = transcriptsData.length > 0
         ? transcriptsData.reduce((sum, t) => sum + (parseInt(t.user_rating) || 0), 0) / transcriptsData.length
+        : null;
+      
+      const avgBiasRating = transcriptsData.length > 0
+        ? transcriptsData.reduce((sum, t) => sum + (parseInt(t.bias_rating) || 0), 0) / transcriptsData.length
         : null;
 
       setDoctor({
         ...doctorData,
-        computed_rating: avgRating
+        computed_rating: avgRating,
+        computed_bias_rating: avgBiasRating
       });
       setTranscripts(transcriptsData);
     } catch (err) {
@@ -80,6 +86,39 @@ export default function DoctorDetailPage() {
   const closeModal = () => {
     setShowModal(false);
     setSelectedTranscript(null);
+  };
+
+  // Helper functions for chart data
+  const getGenderBiasData = (transcripts) => {
+    const genderGroups = transcripts.reduce((acc, t) => {
+      const gender = t.gender || 'unknown';
+      if (!acc[gender]) acc[gender] = { total: 0, count: 0 };
+      acc[gender].total += parseInt(t.bias_rating) || 0;
+      acc[gender].count += 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(genderGroups).map(([gender, data]) => ({
+      gender: gender.charAt(0).toUpperCase() + gender.slice(1),
+      avgBias: data.count > 0 ? (data.total / data.count).toFixed(2) : 0,
+      count: data.count
+    }));
+  };
+
+  const getRaceBiasData = (transcripts) => {
+    const raceGroups = transcripts.reduce((acc, t) => {
+      const race = t.race || 'unknown';
+      if (!acc[race]) acc[race] = { total: 0, count: 0 };
+      acc[race].total += parseInt(t.bias_rating) || 0;
+      acc[race].count += 1;
+      return acc;
+    }, {});
+    
+    return Object.entries(raceGroups).map(([race, data]) => ({
+      race: race.length > 15 ? race.substring(0, 15) + '...' : race,
+      avgBias: data.count > 0 ? (data.total / data.count).toFixed(2) : 0,
+      count: data.count
+    }));
   };
 
   if (loading) {
@@ -144,7 +183,7 @@ export default function DoctorDetailPage() {
         </div>
 
         {/* Doctor Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
             <div className="text-sm text-blue-600 mb-1">Total Patients</div>
             <div className="text-3xl font-semibold text-blue-800">
@@ -155,6 +194,12 @@ export default function DoctorDetailPage() {
             <div className="text-sm text-emerald-600 mb-1">Average Rating</div>
             <div className="text-3xl font-semibold text-emerald-800">
               ⭐ {doctor.computed_rating ? doctor.computed_rating.toFixed(1) : "N/A"}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-red-100 shadow-lg p-6">
+            <div className="text-sm text-red-600 mb-1">Average Bias Rating</div>
+            <div className="text-3xl font-semibold text-red-800">
+              📊 {doctor.computed_bias_rating ? doctor.computed_bias_rating.toFixed(1) : "N/A"}
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-purple-100 shadow-lg p-6">
@@ -175,6 +220,108 @@ export default function DoctorDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Bias Analysis Charts */}
+        {transcripts.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Bias vs Weight */}
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-700 mb-4">Bias Rating vs Patient Weight</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <ScatterChart>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="weight" 
+                    type="number" 
+                    domain={['dataMin - 10', 'dataMax + 10']}
+                    label={{ value: 'Weight (lbs)', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis 
+                    dataKey="bias_rating" 
+                    type="number" 
+                    domain={[0, 10]}
+                    label={{ value: 'Bias Rating', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip formatter={(value, name) => [value, name === 'bias_rating' ? 'Bias Rating' : 'Weight']} />
+                  <Scatter 
+                    name="Patients" 
+                    data={transcripts.map(t => ({ 
+                      weight: parseInt(t.weight) || 0, 
+                      bias_rating: parseInt(t.bias_rating) || 0,
+                      patient: t.patient_name
+                    }))} 
+                    fill="#3B82F6" 
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Bias vs Age */}
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-700 mb-4">Bias Rating vs Patient Age</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <ScatterChart>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="age" 
+                    type="number" 
+                    domain={['dataMin - 5', 'dataMax + 5']}
+                    label={{ value: 'Age (years)', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis 
+                    dataKey="bias_rating" 
+                    type="number" 
+                    domain={[0, 10]}
+                    label={{ value: 'Bias Rating', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip formatter={(value, name) => [value, name === 'bias_rating' ? 'Bias Rating' : 'Age']} />
+                  <Scatter 
+                    name="Patients" 
+                    data={transcripts.map(t => ({ 
+                      age: parseInt(t.age) || 0, 
+                      bias_rating: parseInt(t.bias_rating) || 0,
+                      patient: t.patient_name
+                    }))} 
+                    fill="#10B981" 
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Bias vs Gender */}
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-700 mb-4">Average Bias Rating by Gender</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={getGenderBiasData(transcripts)}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="gender" />
+                  <YAxis domain={[0, 10]} label={{ value: 'Avg Bias Rating', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Bar dataKey="avgBias" fill="#F59E0B" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Bias vs Race */}
+            <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-blue-700 mb-4">Average Bias Rating by Race</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={getRaceBiasData(transcripts)}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="race" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis domain={[0, 10]} label={{ value: 'Avg Bias Rating', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Bar dataKey="avgBias" fill="#EF4444" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Patient Interactions */}
         <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">

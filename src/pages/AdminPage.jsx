@@ -56,9 +56,9 @@ export default function AdminPage() {
           : 0;
 
       const avgBiasScore =
-        doctorsData.length > 0
-          ? doctorsData.reduce((sum, d) => sum + (d.average_bias || 0), 0) /
-            doctorsData.length
+        transcriptsData.length > 0
+          ? transcriptsData.reduce((sum, t) => sum + (parseInt(t.bias_rating) || 0), 0) /
+            transcriptsData.length
           : 0;
 
       // Get unique users from transcripts
@@ -79,12 +79,18 @@ export default function AdminPage() {
         return acc;
       }, {});
 
-      // Process doctors with dynamic rating
+      // Process doctors with dynamic rating and bias rating
       const processedDoctors = doctorsData.map((d) => {
         const doctorTranscripts = transcriptsByDoctor[d.doctor_id] || [];
         const computedRating =
           doctorTranscripts.length > 0
-            ? doctorTranscripts.reduce((sum, t) => sum + (t.user_rating || 0), 0) /
+            ? doctorTranscripts.reduce((sum, t) => sum + (parseInt(t.user_rating) || 0), 0) /
+              doctorTranscripts.length
+            : null;
+        
+        const computedBiasRating =
+          doctorTranscripts.length > 0
+            ? doctorTranscripts.reduce((sum, t) => sum + (parseInt(t.bias_rating) || 0), 0) /
               doctorTranscripts.length
             : null;
 
@@ -92,6 +98,7 @@ export default function AdminPage() {
           doctor_id: d.doctor_id,
           doctor_name: d.doctor_name,
           average_rating: d.average_rating != null ? d.average_rating : computedRating,
+          average_bias_rating: computedBiasRating,
           transcript_count: doctorTranscripts.length,
           transcripts: doctorTranscripts,
         };
@@ -254,9 +261,15 @@ export default function AdminPage() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <div className={`px-3 py-1 rounded-lg ${getRatingColor(d.average_rating ?? 0)}`}>
-                      <div className="text-xs opacity-75">Average Rating</div>
-                      <div className="font-semibold">⭐ {d.average_rating != null ? d.average_rating.toFixed(2) : "N/A"}</div>
+                    <div className="flex gap-3">
+                      <div className={`px-3 py-1 rounded-lg ${getRatingColor(d.average_rating ?? 0)}`}>
+                        <div className="text-xs opacity-75">Patient Rating</div>
+                        <div className="font-semibold">⭐ {d.average_rating != null ? d.average_rating.toFixed(2) : "N/A"}</div>
+                      </div>
+                      <div className={`px-3 py-1 rounded-lg ${getRatingColor(10 - (d.average_bias_rating ?? 10))}`}>
+                        <div className="text-xs opacity-75">Bias Rating</div>
+                        <div className="font-semibold">📊 {d.average_bias_rating != null ? d.average_bias_rating.toFixed(2) : "N/A"}</div>
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-gray-600">
