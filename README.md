@@ -122,4 +122,5 @@ npm run dev
 
 ### Doctor Performance Analytics
 ![Doctor Analytics](images/image4.png)
+![Bias Analysis](images/image5.png)
 
