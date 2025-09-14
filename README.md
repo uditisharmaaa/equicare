@@ -84,7 +84,7 @@ We split the project into its different core functionalities:
 
 1. Clone the repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/uditisharmaaa/equicare
 cd equicare
 ```
 
@@ -94,10 +94,6 @@ npm install
 ```
 
 3. Set up environment variables
-```bash
-cp .env.example .env
-# Add your Supabase and Anthropic API keys
-```
 
 4. Start the development server
 ```bash
@@ -112,14 +108,6 @@ npm run dev
 - **Speech Recognition:** Chrome Speech to Text API
 - **Charts:** Recharts
 - **Deployment:** Vercel/Netlify ready
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our contributing guidelines for more details.
 
 ## 📸 Product Demo
 
