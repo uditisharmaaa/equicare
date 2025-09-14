@@ -323,6 +323,54 @@ export default function DoctorDetailPage() {
           </div>
         )}
 
+        {/* Bias Reviews Section */}
+        {transcripts.filter(t => t.bias_review && t.bias_review.trim()).length > 0 && (
+          <div className="bg-white rounded-2xl border border-red-100 shadow-lg p-6 mb-8">
+            <h2 className="text-xl font-semibold text-red-700 mb-6 flex items-center">
+              <span className="mr-2">🔍</span>
+              Bias Analysis Reviews ({transcripts.filter(t => t.bias_review && t.bias_review.trim()).length})
+            </h2>
+            <div className="space-y-4">
+              {transcripts
+                .filter(t => t.bias_review && t.bias_review.trim())
+                .map((transcript) => (
+                  <div
+                    key={transcript.transcript_identifier}
+                    className="border border-red-200 rounded-lg p-4 bg-red-50"
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <span className="font-semibold text-red-700">
+                          {transcript.patient_name || "Unknown Patient"}
+                        </span>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {transcript.age} year old {transcript.gender} • {transcript.race} • {transcript.cause}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm text-gray-500">
+                          {formatDate(transcript.date)}
+                        </span>
+                        <div className="mt-1 px-2 py-1 rounded text-xs bg-red-200 text-red-800">
+                          Bias Rating: {transcript.bias_rating}/10
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-red-200">
+                      <h4 className="font-medium text-red-700 mb-2 flex items-center">
+                        <span className="mr-2">📋</span>
+                        Bias Analysis Review:
+                      </h4>
+                      <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                        {transcript.bias_review}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* Patient Interactions */}
         <div className="bg-white rounded-2xl border border-blue-100 shadow-lg p-6">
           <h2 className="text-xl font-semibold text-blue-700 mb-6">
