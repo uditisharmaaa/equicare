@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
 import UserPage from "./pages/UserPage";
 import AdminPage from "./pages/AdminPage";
+import DoctorDetailPage from "./pages/DoctorDetailPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
@@ -22,6 +23,7 @@ export default function App() {
 
         {/* Admin flow */}
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/doctor/:doctorId" element={<DoctorDetailPage />} />
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
